@@ -214,7 +214,7 @@ def flag_of_the_day():
 
 def word_of_the_day():
     apiUrl = 'http://api.wordnik.com/v4'
-    apiKey = 'y4rl9b8hwigqyw273pqkc0n37xe4tpqj7a5w97dxoh1c48tvx'
+    apiKey = '***'
     client = swagger.ApiClient(apiKey, apiUrl)
 
 
