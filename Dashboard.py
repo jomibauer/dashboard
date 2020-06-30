@@ -8,6 +8,7 @@ import sys
 sys.path.append(os.getcwd())
 import Widgets
 import Planner
+import Settings
 
 main_path = os.getcwd()
 
@@ -16,7 +17,7 @@ class PlannerFrame(ttk.Frame):
     # separate frame to contain our Planner
     def __init__(self, parent, planner_obj):
         ttk.Frame.__init__(self, parent)
-        self.planner = startup(self, planner_obj, parent)
+        self.cal_app = startup(self, planner_obj, parent)
 
 
 class Dashboard(ttk.Frame):
@@ -24,7 +25,9 @@ class Dashboard(ttk.Frame):
     def __init__(self, parent, planner_obj, slot1=Widgets.BlankWidget, slot2=Widgets.BlankWidget):
         ttk.Frame.__init__(self, parent)
         self.calendar_slot = PlannerFrame(self, planner_obj)
+        self.cal_app = self.calendar_slot.cal_app
         self.planner_obj = planner_obj
+
         self.slot1 = slot1(self, planner_obj)
         self.slot2 = slot2(self, planner_obj)
 
@@ -48,12 +51,13 @@ class Dashboard(ttk.Frame):
 
 def on_closing():
     # save the planner and related task & widget data when closing the window
-    Planner.pickler(todays_cal)
+    Planner.pickler(todays_planner_obj)
     root.destroy()
 
 
 def startup(tk_root, planner_obj, dashboard):
-    calendar_app = Planner.CalendarApp(tk_root, planner_obj, dashboard).pack(side="top", fill="both", expand=True)
+    calendar_app = Planner.CalendarApp(tk_root, planner_obj, dashboard)
+    calendar_app.pack(side="top", fill="both", expand=True)
     return calendar_app
 
 
@@ -61,9 +65,13 @@ if __name__ == '__main__':
     root = tk.Tk()
     root.title('Calendar')
 
-    todays_cal = Planner.cal_maker(main_path)
+    todays_planner_obj = Planner.cal_maker(main_path)
     style = ttk.Style()
     style.theme_use('clam')
-    dash = Dashboard(root, todays_cal, todays_cal.widget_list[0], todays_cal.widget_list[1]).pack(fill='both', expand=True)
+    dash = Dashboard(root, todays_planner_obj, todays_planner_obj.widget_list[0],
+                     todays_planner_obj.widget_list[1])
+    dash.pack(fill='both', expand=True)
+    menubar = Settings.MenuBar(root, todays_planner_obj, dash)
+    root.config(menu=menubar)
     root.protocol('WM_DELETE_WINDOW', on_closing)
     root.mainloop()

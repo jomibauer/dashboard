@@ -18,7 +18,9 @@ def make_descr():
                                  "country it belongs to.",
               "Word of the Day": "Provides the user with a new word, pronunciation and definitions and prompts them to "
                                  "write a sentences with the new word.",
-              "Picture of the Day": "Provides user with a pleasant picture to look at every day."
+              "Picture of the Day": "Provides user with a pleasant picture to look at every day.",
+              "Art of the Day": "Provides user with a picture of a random artwork from the Met's art database along "
+                                "with info on the artwork, the artist and a link to more details about the piece."
               }
 
     return descr
@@ -27,7 +29,8 @@ def make_descr():
 def make_titles():
     titles = {Widgets.FlagOfTheDayWidget: "Flag of the Day",
               Widgets.WordOfTheDayWidget: "Word of the Day",
-              Widgets.PictureOfTheDayWidget: "Picture of the Day"
+              Widgets.PictureOfTheDayWidget: "Picture of the Day",
+              Widgets.ArtOfTheDayWidget: "Art of the Day"
               }
     return titles
 
@@ -35,7 +38,8 @@ def make_titles():
 def make_classes():
     classes = {"Flag of the Day": Widgets.FlagOfTheDayWidget,
                "Word of the Day": Widgets.WordOfTheDayWidget,
-               "Picture of the Day": Widgets.PictureOfTheDayWidget
+               "Picture of the Day": Widgets.PictureOfTheDayWidget,
+               "Art of the Day": Widgets.ArtOfTheDayWidget
                }
     return classes
 
@@ -52,13 +56,39 @@ class SettingsTopLevel(tk.Toplevel):
         self.remove_button = ttk.Button(self, text='Remove a task',
                                         command=lambda: remove_window(self.parent,
                                                                       self.main_app,
-                                                                      self.main_app.cal.task_dict))
+                                                                      self.main_app.planner_obj.task_dict))
 
         self.widget_menu_button = ttk.Button(self, text='Widget Menu', command=lambda: widget_menu(self.parent,
-                                                                                                   self.main_app.cal,
+                                                                                                   self.main_app.planner_obj,
                                                                                                    dashboard))
         self.remove_button.grid(column=0, row=0)
         self.widget_menu_button.grid(column=0, row=1)
+
+class MenuBar(tk.Menu):
+    def __init__(self, parent, planner_obj, dashboard):
+        tk.Menu.__init__(self, parent)
+        self.planner_obj = planner_obj
+        self.dashboard = dashboard
+        # create cascades
+        settings_menu = SettingsMenu(self, self.dashboard.cal_app, self.planner_obj, self.dashboard)
+
+        # add cascades to menu bar
+        self.add_cascade(label="Settings", menu=settings_menu)
+
+
+class SettingsMenu(tk.Menu):
+    def __init__(self, parent, cal_app, planner_obj, dashboard):
+        tk.Menu.__init__(self, parent, tearoff=0)
+        self.parent = parent
+        self.planner_obj = planner_obj
+        self.cal_app = cal_app
+        self.add_command(label="Remove a Task", command=lambda: remove_window(self.parent,
+                                                                              self.cal_app,
+                                                                              self.planner_obj.task_dict))
+        self.add_command(label="Widget Menu", command=lambda: widget_menu(self.parent,
+                                                                          self.planner_obj,
+                                                                          dashboard))
+
 
 # RemoveTasks Toplevel, Class
 def remove_window(parent, main_app, task_dict):
@@ -77,7 +107,7 @@ class RemoveTasksTopLevel(tk.Toplevel):
         '''
         tk.Toplevel.__init__(self, parent)
         self.main_app = main_app
-        self.cal = main_app.cal
+        self.planner_obj = main_app.planner_obj
         self.temp_dict = dict(task_dict)
         self.frequencies = ['daily', 'weekly', 'monthly', 'specific date', 'every other day', 'every other week']
 
@@ -111,7 +141,7 @@ class RemoveTasksTopLevel(tk.Toplevel):
     def make_checkbuttons(self):
         res = {}
         for freq in self.frequencies:
-            task_list = self.cal.get_tasks_by_freq(freq)
+            task_list = self.planner_obj.get_tasks_by_freq(freq)
             res[freq] = [ttk.Checkbutton(self.remove_widgets[freq].check_button_frame, text=task, onvalue=True,
                                          offvalue=False, variable=tk.BooleanVar()) for task in task_list]
         return res
@@ -146,8 +176,8 @@ class RemoveTasksTopLevel(tk.Toplevel):
         if not save_box:
             self.destroy()
         elif save_box:
-            self.cal.update_task_dict(self.temp_dict)
-            Planner.pickler(self.cal)
+            self.planner_obj.update_task_dict(self.temp_dict)
+            Planner.pickler(self.planner_obj)
             self.main_app.refresh_tasks()
             self.destroy()
         else:
@@ -167,6 +197,7 @@ class WidgetMenu(tk.Toplevel):
         self.notifier_2 = tk.StringVar()
         self.notifier_1.set(' ')
         self.notifier_2.set(' ')
+        self.swapped = False
         self.protocol('WM_DELETE_WINDOW', self.on_closing)
 
         self.descr_list = make_descr()
@@ -221,10 +252,13 @@ class WidgetMenu(tk.Toplevel):
             new_list = [i for i in widget_pool if i is not old]
             self.planner_obj.set_widget_list(new_list)
             self.my_widgets = MyWidgets(self.background, self, self.planner_obj.get_widget_list())
+            self.swapped = True
 
     def on_closing(self):
         Planner.pickler(self.planner_obj, widget=True)
-        self.dashboard.refresh_widgets()
+        # if swapped is set to true in self.swap_widgets, refresh the widgets.
+        if self.swapped:
+            self.dashboard.refresh_widgets()
         self.destroy()
 
 

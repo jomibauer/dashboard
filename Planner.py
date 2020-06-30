@@ -16,9 +16,19 @@ import Settings
 import Dashboard
 import Widgets
 
+# the two biggest pieces of this .py file are the Planner object and the CalendarApp object.  The Planner is
+# what gets passed around to everything -- it's where we store our data on tasks, widgets, etc.  And it is what
+# gets saved when we close the file.  If something is accessing data or saving it or whatever, it needs to have a way
+# to talk to this object.
 
+# the CalendarApp is where all the Data stored in our Planner obj gets visualized and turned into a UI, thru
+# combining various widgets.
 
 class Planner(object):
+    # this is the Planner object where we store data and create ids for using with our different data structures.
+
+    # task ids is a list of keys used to get our tasks for the day from the tasks_dict
+    # week_key is used to store user input (if there is any) in our widget_data data structure.
     def __init__(self, task_dict, date_id, mainpath):
         # for loop exists to create spots in our dictionary for everything in task_keys, even if we dont have a task
         # there.  This helps us avoid keyErrors later on when printing todays tasks.
@@ -46,9 +56,11 @@ class Planner(object):
         today = datetime.datetime.now().day
         if today != self.task_dict['last']:
             self.task_dict['last'] = today
-            [i.swap_every_other() for i in self.task_dict['daily']]
+            if self.task_dict['daily']:
+                [i.swap_every_other() for i in self.task_dict['daily']]
             if strftime("%a").upper() == 'SUN':
-                [i.swap_every_other() for i in self.get_tasks_by_freq('every other week')]
+                if self.get_tasks_by_freq(('every other week')):
+                    [i.swap_every_other() for i in self.get_tasks_by_freq('every other week')]
 
     def get_widget_list(self):
         return self.widget_list
@@ -182,22 +194,23 @@ class TaskCheck(ttk.Checkbutton):
 
 
 class CalendarApp(ttk.Frame):
-    def __init__(self, parent, cal, dashboard):
+    # this is the whole widget on the left of the dashboard.  Contains the clock, date, settings, etc.
+    def __init__(self, parent, planner_obj, dashboard):
         ttk.Frame.__init__(self, parent)
         self.parent = parent
         self.dashboard = dashboard
         # add the widgets
-        self.cal = cal
-        self.date_id = cal.date_id
+        self.planner_obj = planner_obj
+        self.date_id = planner_obj.date_id
         self.clock = ClockWidget(self)
         self.date = DateWidget(self)
-        self.tasks = TasksWidget(self, cal)
-        self.add_button = AddTaskWidget(self, cal)
-        self.settings = SettingsWidget(self, dashboard)
+        self.tasks = TasksWidget(self, planner_obj)
+        self.add_button = AddTaskWidget(self, planner_obj)
+        #self.settings = SettingsWidget(self, dashboard)
 
         # geometry management for the widgets
         self.clock.grid(column=0, row=0)
-        self.settings.grid(column=1, row=0)
+        #self.settings.grid(column=1, row=0)
         self.date.grid(column=0, row=1, sticky='w')
         self.tasks.grid(column=0, row=2, sticky='w')
         self.add_button.grid(column=0, row=3, sticky='e')
@@ -205,7 +218,7 @@ class CalendarApp(ttk.Frame):
     def refresh_tasks(self):
         # destroy and redraw tasks, called whenever our tasks_dict is altered by AddNewTask or RemoveTask toplevels
         self.tasks.destroy()
-        self.tasks = TasksWidget(self, self.cal)
+        self.tasks = TasksWidget(self, self.planner_obj)
         self.tasks.grid(column=0, row=2, sticky='w')
 
 
@@ -285,14 +298,14 @@ def add_task_window(parent, main_app):
 
 
 class AddNewTask(tk.Toplevel):
-    def __init__(self, parent, main_app):
+    def __init__(self, parent, cal_app):
         tk.Toplevel.__init__(self, parent)
 
-        self.main_app = main_app
-        self.tasks = main_app.tasks
-        self.cal = main_app.cal
-        self.task_id_maker = {'daily': self.cal.task_ids[0], 'every other day': self.cal.task_ids[0],
-                          'weekly': self.cal.task_ids[1], 'every other week':self.cal.task_ids[1],
+        self.cal_app = cal_app
+        self.tasks = cal_app.tasks
+        self.planner_obj = cal_app.planner_obj
+        self.task_id_maker = {'daily': self.planner_obj.task_ids[0], 'every other day': self.planner_obj.task_ids[0],
+                          'weekly': self.planner_obj.task_ids[1], 'every other week':self.planner_obj.task_ids[1],
                           'monthly': 'monthly', 'specific date': 'specific date'}
 
         self.title('Add a task')
@@ -317,8 +330,8 @@ class AddNewTask(tk.Toplevel):
         if not save_box:
             self.destroy()
         elif save_box:
-            pickler(self.cal)
-            self.main_app.refresh_tasks()
+            pickler(self.planner_obj)
+            self.cal_app.refresh_tasks()
             self.destroy()
         else:
             pass
@@ -361,10 +374,10 @@ class AddNewTask(tk.Toplevel):
         else:
             # else leave it blank so it stays as None
             new_task = Task(text, task_id, frequency)
-        if task_id not in self.cal.task_dict.keys() or self.cal.task_dict[task_id] is None:
-            self.cal.task_dict[task_id] = [new_task]
+        if task_id not in self.planner_obj.task_dict.keys() or self.planner_obj.task_dict[task_id] is None:
+            self.planner_obj.task_dict[task_id] = [new_task]
         else:
-            self.cal.task_dict[task_id].append(new_task)
+            self.planner_obj.task_dict[task_id].append(new_task)
         self.tasks_added_list.list_added_tasks(new_task)
 
 
@@ -385,10 +398,10 @@ class FrequencyMenuWidget(ttk.Frame):
         self.configure(padding='3 3 3 3')
         self.frequencies = ['daily', 'weekly', 'monthly', 'specific date', 'every other day', 'every other week']
         self.freq_var = tk.StringVar(parent)
-        self.freq_var.set('daily')
+        self.freq_var.set('specific date')
         # add widgets
         self.freq_prompt = ttk.Label(self, text='How often do you want to do it?')
-        self.freq_menu = ttk.OptionMenu(self, self.freq_var, self.frequencies[0], *self.frequencies,
+        self.freq_menu = ttk.OptionMenu(self, self.freq_var, self.frequencies[3], *self.frequencies,
                                         command=self.optional_entries)
         self.week_entry = WeeklyEntryFrame(self)
         self.month_entry = MonthlyEntryFrame(self)
@@ -403,7 +416,7 @@ class FrequencyMenuWidget(ttk.Frame):
         self.month_entry.grid(column=1, row=2, sticky='n')
         self.month_entry.grid_forget()
         self.spec_entry.grid(column=1, row=2, sticky='n')
-        self.spec_entry.grid_forget()
+
 
     def optional_entries(self, value):
         # command for our dropdown menu.  Creates or forgets frames based on what's selected by the user, allowing them
@@ -464,7 +477,7 @@ class SpecificDateFrame(ttk.Frame):
         self.info = ttk.Label(self, text='Pick a date')
         self.full_calendar = Calendar(self,
                                           font="Arial 14", selectmode='day',
-                                          cursor="hand1", year=int(datetime.datetime.now().year),
+                                          cursor="hand2", year=int(datetime.datetime.now().year),
                                           month=int(datetime.datetime.now().month),
                                           day=int(datetime.datetime.now().day))
 

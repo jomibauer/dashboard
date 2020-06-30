@@ -8,6 +8,7 @@ import random
 import webbrowser
 import datetime
 import pickle
+import PIL
 # Following imports may read as an error in your IDE.  What should happen is sys.path.append should add the current
 # working directory to sys.path only while the script runs.  Then it can import stuff from the other .py files in this
 # directory.
@@ -33,6 +34,16 @@ def callback(url):
     # open embedded hyperlinks (at param url) in widgets
     webbrowser.open_new(url)
 
+def open_img_from_url(url):
+    raw_data = urlopen(url).read()
+    return Image.open(BytesIO(raw_data))
+
+def open_img_from_bytes(bytes):
+    return Image.open(BytesIO(bytes))
+
+def resize_img(image, max_height=256):
+    conv_ratio = image.width/ image.height
+    return image.resize((int(max_height * conv_ratio), max_height), Image.ANTIALIAS)
 
 class MultiChoiceQuiz(ttk.Frame):
     '''
@@ -103,41 +114,60 @@ class ShortWritingWidget(ttk.Frame):
 
 
 class ImageWithInfo(ttk.Frame):
-    def __init__(self, parent, image_url, title=None, info=None):
+    def __init__(self, parent, image, title=None, info=None, artist=None, image_url=None):
         ttk.Frame.__init__(self, parent)
-        print(image_url)
+        self.image = image
         self.image_url = image_url
         self.title = title
         self.info = info
-        # get picture from image_url
-        self.raw_image = self.open_img_url(self.image_url)
-        # resize with a max height of 100 pixels
-        self.conv_ratio = self.raw_image.width / self.raw_image.height
-        self.raw_image.resize((int(100*self.conv_ratio), 100))
+        self.artist = artist
+        # get picture
+        if type(self.image) is str:
+            self.raw_image = open_img_from_url(self.image)
+        else:
+            self.raw_image = open_img_from_bytes(self.image)
+        # resize with a max height of 256 pixels
+        self.raw_image = resize_img(self.raw_image, 256)
         # create widget & geometry
         self.display_pic = ImageTk.PhotoImage(self.raw_image)
         self.image_widget = ttk.Label(self, image=self.display_pic, relief='raised', borderwidth=10)
-        self.image_widget.grid(column=0, row=1)
+        self.image_widget.grid(column=0, row=1, columnspan=2)
         # only make these if kwargs are passed
+        # hyperlink widget to link to image in browser
+        if self.image_url:
+            self.hyperlink = ttk.Label(self, text='View in browser', foreground='blue', cursor='hand2')
+            self.hyperlink.bind('<Button-1>', lambda e: callback(self.image_url))
+            self.hyperlink.grid(column=0, row=2, sticky='w')
         if self.title:
-            self.title_widget = ttk.Label(self, text=self.title)
+            self.title_widget = ttk.Label(self, text=self.title, wraplength=200, justify=tk.LEFT)
             self.title_widget.grid(column=0, row=0)
+        if self.artist:
+            self.artist_widget = ttk.Label(self, text=self.artist)
+            self.artist_widget.grid(column=1, row=0)
         if self.info:
             self.info_widget = ttk.Label(self, text=self.info)
-            self.info_widget.grid(column=0, row=2)
-
-    def open_img_url(self, url):
-
-        raw_data = urlopen(url).read()
-        print(raw_data)
-
-        return Image.open(BytesIO(raw_data))
-
-
+            self.info_widget.grid(column=0, row=1)
 
 # =====================================
 # ===============Widgets===============
 # =====================================
+
+
+class ArtOfTheDayWidget(ttk.Frame):
+    '''art of the day widget, gets art and info on art from Met database
+        api requests happen in calendar_proj/apiart.py'''
+    def __init__(self, parent, planner_obj):
+        ttk.Frame.__init__(self, parent)
+        self.config(borderwidth=5, relief='sunken')
+        self.planner_obj = planner_obj
+        self.art_data = APIs.art_of_the_day()
+        self.image = self.art_data[0]
+        self.image_url = self.art_data[3]
+        self.title = self.art_data[4]
+        self.artist = self.art_data[1]
+        self.info = self.art_data[2]
+        self.art_widget = ImageWithInfo(self, self.image, self.title, self.info, self.artist, self.image_url)
+        self.art_widget.pack()
 
 
 class FlagOfTheDayWidget(ttk.Frame):
@@ -214,9 +244,14 @@ class PictureOfTheDayWidget(ttk.Frame):
         ttk.Frame.__init__(self, parent)
         self.image_data = APIs.picture_of_the_day()
         self.planner_obj = planner_obj
-        self.pic_widget = ImageWithInfo(self, self.image_data[1], self.image_data[0])
+        try:
+            self.pic_widget = ImageWithInfo(self, self.image_data[1], title=self.image_data[0],
+                                            image_url=self.image_data[1])
+        except PIL.UnidentifiedImageError:
+            self.pic_widget = ttk.Label(self, text='failed')
 
         self.pic_widget.grid(column=0, row=0)
+
 
 class BlankWidget(ttk.Frame):
     def __init__(self, parent, planner):
